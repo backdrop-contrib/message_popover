@@ -23,7 +23,7 @@ errors; the styling simply disappears. Check for it before updating.
 ### Added
 
 - Layout toggle button on every message, switching the set between the stacked
-  list and a compact cascade, for batches too tall to fit on screen.
+  list and a compact cascade, for batches too tall to fit on screen (#11).
 - Hold button pausing auto-dismiss for all messages, plus automatic pausing
   while a message is hovered or focused.
 - Screen position setting: Left, Centre or Right, with a pixel offset. For
@@ -44,14 +44,15 @@ errors; the styling simply disappears. Check for it before updating.
   message styling. Resolved by dropping the `messages` class (above).
 - **Severity strip colours were being overridden by the theme.** Warning and
   error strips rendered in the theme's colours rather than the module's.
-- **Messages could stack off the bottom of the screen and be unreachable.**
-  Popovers render in the browser top layer and cannot be scrolled to. Messages
-  are now capped to the viewport height and scroll internally, and the cascade
-  layout is available for long runs of messages. Note that errors and long
-  messages never auto-dismiss, so a form failing validation on several fields
-  was a common way to hit this.
-- **Gaps were left in the stack when a message was dismissed.** Remaining
-  messages now close up.
+- **Messages could stack off the bottom of the screen and be unreachable**
+  (#11). Popovers render in the browser top layer and cannot be scrolled to.
+  Messages are now capped to the viewport height and scroll internally, and the
+  cascade layout is available for long runs of messages. Note that errors and
+  long messages never auto-dismiss, so a form failing validation on several
+  fields was a common way to hit this.
+- **Gaps were left in the stack when a message was dismissed** (#11). Closing a
+  message above did not bring the ones below it back up. Remaining messages now
+  close up.
 - Dragged messages are no longer pulled back into the stack when an unrelated
   message is dismissed.
 
