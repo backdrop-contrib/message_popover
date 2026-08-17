@@ -4,7 +4,14 @@ All notable changes to Message Popover are recorded here.
 
 ## 1.x-1.2.0 (unreleased)
 
-### Changed — markup contract
+### BREAKING (display only) — markup contract
+
+This release changes the markup of system messages. It does not change any
+API, hook, configuration key or stored data, and the module renders correctly
+without any action on your part. **But if you have custom CSS or JavaScript
+targeting `.messages` in order to style or script this module's output, it will
+stop matching and your customisation will silently stop applying.** Nothing
+errors; the styling simply disappears. Check for it before updating.
 
 - **The `messages` class has been removed from message markup.** Messages now
   carry only their severity class and `message-popover-item`. Core's
