@@ -49,6 +49,25 @@ function message_popover_settings_form($form, &$form_state) {
     '#default_value' => $config->get('dismiss_timer') ?? 8000,
   ];
 
+  $form['position'] = [
+    '#type' => 'select',
+    '#title' => t('Screen position'),
+    '#description' => t('Where messages appear horizontally.'),
+    '#options' => [
+      'left' => t('Left'),
+      'center' => t('Centre'),
+      'right' => t('Right'),
+    ],
+    '#default_value' => $config->get('position') ?? 'center',
+  ];
+
+  $form['position_offset'] = [
+    '#type' => 'number',
+    '#title' => t('Offset (px)'),
+    '#description' => t('For Left and Right, the distance from that edge of the screen, so messages need not hug it. For Centre, how far to shift from centre — positive moves right, negative moves left. Messages are always kept fully on screen, so an offset too large for the message width is reduced to fit.'),
+    '#default_value' => $config->get('position_offset') ?? 20,
+  ];
+
   return system_settings_form($form);
 }
 
@@ -77,6 +96,19 @@ function theme_message_popover_display($variables) {
   $dismiss_timer = $config->get('dismiss_timer') ?? 8000;
   $persistence_limit = $config->get('persistence_limit') ?? 300;
 
+  // Horizontal placement. Whitelisted rather than interpolated straight into a
+  // class name, and the offset cast to int, since both reach the markup.
+  $position = $config->get('position') ?? 'center';
+  if (!in_array($position, ['left', 'center', 'right'], TRUE)) {
+    $position = 'center';
+  }
+  // Negative is meaningful for Centre (shift left) but not for the edge
+  // anchored positions, where it would just push the message off screen.
+  $position_offset = (int) ($config->get('position_offset') ?? 20);
+  if ($position !== 'center') {
+    $position_offset = max(0, $position_offset);
+  }
+
   backdrop_add_js([
     'messagePopover' => ['timer' => (int) $dismiss_timer]
   ], 'setting');
@@ -89,9 +121,13 @@ function theme_message_popover_display($variables) {
   $icon_base = base_path() . 'core/misc/icons/';
   backdrop_add_css(
     ':root {'
+    // Phosphor names, as shipped in core/misc/icons — NOT the Font Awesome
+    // equivalents. warning.svg is the exclamation triangle; warning-circle.svg
+    // the circled exclamation. A wrong name fails silently: an unresolvable
+    // mask-image simply paints nothing.
     . ' --message-popover-icon-status: url(' . $icon_base . 'check-circle.svg);'
-    . ' --message-popover-icon-warning: url(' . $icon_base . 'exclamation-triangle.svg);'
-    . ' --message-popover-icon-error: url(' . $icon_base . 'exclamation-circle.svg);'
+    . ' --message-popover-icon-warning: url(' . $icon_base . 'warning.svg);'
+    . ' --message-popover-icon-error: url(' . $icon_base . 'warning-circle.svg);'
     . ' }',
     ['type' => 'inline']
   );
@@ -136,7 +172,16 @@ function theme_message_popover_display($variables) {
         'popover' => 'manual',
         'role' => ($type === 'error') ? 'alert' : 'status',
         'data-auto-dismiss' => $auto_dismiss ? 'true' : 'false',
-        'class' => ['messages', $type, 'message-popover-item'],
+        // Deliberately NOT the core "messages" class. This module replaces
+        // message theming outright and renders into the top layer, so core's
+        // messages.theme.css and every theme's .messages rules are pure
+        // interference — core paints its own icon onto the ::before we use for
+        // the severity strip, and themes recolour it. Styling here is
+        // self-contained instead.
+        'class' => [$type, 'message-popover-item', 'popover-pos-' . $position],
+        // Inline so it beats the stylesheet's 0px default without a
+        // specificity or load-order argument. Ignored by the centred variant.
+        'style' => '--message-popover-edge: ' . $position_offset . 'px;',
       ];
 
       $type_labels = [
@@ -152,6 +197,13 @@ function theme_message_popover_display($variables) {
       // Hidden severity label gives screen readers the message type; the span
       // allows specific vertical alignment via CSS.
       $rendered_items .= '  <div class="message-content"><span class="element-invisible">' . $type_label . ': </span><span class="popover-message-text">' . $message . '</span></div>';
+      // Hold toggle: pauses auto-dismiss for the whole set. Ships unpressed;
+      // JS flips it if the set is already being held when this message lands.
+      $rendered_items .= '  <button type="button" class="popover-hold" aria-pressed="false" aria-label="' . t('Hold messages open') . '" title="' . t('Hold messages open') . '">&#9208;</button>';
+      // Layout toggle. Present on EVERY message because it acts on the whole
+      // set — whichever message the user can reach, the control is on it. JS
+      // rewrites the label as the mode flips.
+      $rendered_items .= '  <button type="button" class="popover-layout" aria-label="' . t('Cascade messages') . '" title="' . t('Cascade messages') . '">&#10697;</button>';
       $rendered_items .= '  <button class="popover-close" popovertarget="' . $id . '" popovertargetaction="hide" aria-label="' . t('Close') . '">&times;</button>';
       $rendered_items .= '</div>';
     }

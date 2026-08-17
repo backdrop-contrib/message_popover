@@ -1,5 +1,7 @@
 {
   "debug_mode": 0,
   "persistence_limit": 300,
-  "dismiss_timer": 8000
+  "dismiss_timer": 8000,
+  "position": "center",
+  "position_offset": 20
 }

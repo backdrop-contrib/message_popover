@@ -17,3 +17,6 @@ php_errors.log
 
 # Ignore Claude Code project instructions (local dev only, not shipped)
 CLAUDE.md
+
+# Ignore the dev changelog (working notes; the public one is CHANGELOG.md)
+DEVCHANGELOG.md

@@ -3,6 +3,21 @@
  * Standardised for Backdrop CMS 1.x / 2.x.
  */
 
+/* Header strip height. Declared on the base selector (not the :popover-open
+   branch) so the ::before/::after pseudo-elements can read it, and so the JS
+   drag hit-test can read it back rather than duplicating the number. */
+.message-popover-item {
+  --message-popover-header: 24px;
+  /* Severity strip and icon geometry, in px so the alignment maths is direct
+     and does not shift with the theme's font size. Tune the icon by changing
+     --message-popover-icon-top alone; the horizontal centring derives from the
+     strip and icon widths. */
+  --message-popover-strip-width: 48px;
+  --message-popover-icon-size: 24px;
+  --message-popover-icon-top: 8px; /* Gap below the header strip */
+  --message-popover-content-padding: 12px;
+}
+
 /* Main Container.
    :is() is required (not a plain comma list): browsers without the Popover API
    don't recognise :popover-open and would drop the whole rule, but :is() is
@@ -11,18 +26,26 @@
 :is(.message-popover-item:popover-open, .message-popover-item.popover-fallback) {
   display: flex;
   flex-direction: column;
+  /* Explicit: core has no global border-box rule (misc/normalize.css leaves
+     most elements content-box) and we no longer inherit it from .messages.
+     Without it the max-block-size cap below excludes the padding and border. */
+  box-sizing: border-box;
   position: fixed;
   inset-block-start: 3.5rem;
-  inset-inline-start: 50%;
-  transform: translateX(-50%);
   margin: 0;
   padding: 0;
-  padding-block-start: 14px; /* Header Strip Height */
+  padding-block-start: var(--message-popover-header);
   border: 1px solid darkgrey;
   border-radius: 4px;
   width: fit-content;
   min-width: 320px;
   max-width: 90vw;
+  /* Never taller than the viewport: without this a single long message grows
+     past the fold, and being fixed/top-layer it cannot be scrolled to.
+     .message-content carries overflow:auto, so the text scrolls instead.
+     dvh not vh — vh overshoots on mobile by the height of the URL bar. */
+  max-block-size: calc(100vh - 5rem);
+  max-block-size: calc(100dvh - 5rem);
   resize: both;
   overflow: hidden;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
@@ -32,18 +55,69 @@
   cursor: default;
 }
 
-/* Maintain horizontal centering during the initial processed state */
-.message-popover-item.popover-processed {
+/* Horizontal placement — FIRST PAINT ONLY.
+   One of these classes is always present, written by PHP from the configured
+   position, with --message-popover-edge carrying the configured pixel offset.
+
+   These give a sensible position for the frame between showPopover() and the
+   first relayout. JS then overwrites inset-inline-start/end with measured,
+   viewport-clamped pixel values, because the box is width:fit-content and CSS
+   cannot know how wide it ended up — so it cannot tell when an offset would
+   push it off screen. See clampedInlineStart() in message_popover.js. */
+.message-popover-item {
+  --message-popover-edge: 0px;
+}
+
+/* Centre takes the offset as a shift from centre, positive moving inline-end,
+   so "centred but nudged right" is expressible. */
+.message-popover-item.popover-pos-center {
+  inset-inline-start: calc(50% + var(--message-popover-edge));
+  inset-inline-end: auto;
   transform: translateX(-50%);
 }
 
-/* The Top Header / Drag Handle Band */
+.message-popover-item.popover-pos-left {
+  inset-inline-start: var(--message-popover-edge);
+  inset-inline-end: auto;
+  transform: none;
+}
+
+.message-popover-item.popover-pos-right {
+  inset-inline-start: auto;
+  inset-inline-end: var(--message-popover-edge);
+  transform: none;
+}
+
+/* Animate re-stacking so a message closing reads as the others moving up
+   rather than teleporting. Applied only AFTER the element's first placement
+   (JS adds .popover-placed on the following frame), or a newly shown popover
+   would slide in from wherever the browser first painted it. */
+.message-popover-item.popover-placed {
+  transition: inset-block-start 150ms ease, inset-inline-start 150ms ease,
+    inset-inline-end 150ms ease;
+}
+
+/* Dragging sets inset on every mousemove — the transition would make the
+   window lag behind the pointer. */
+.message-popover-item.popover-dragging {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message-popover-item.popover-placed {
+    transition: none;
+  }
+}
+
+/* The Top Header / Drag Handle Band.
+   24px tall so the buttons sitting in it can meet the WCAG 2.2 AA 2.5.8
+   minimum target size of 24x24. */
 .message-popover-item::after {
   content: "";
   position: absolute;
   inset-block-start: 0;
-  inset-inline: 0 28px; /* Stop the handle 28px before the end to clear the close button */
-  height: 14px;
+  inset-inline: 0 72px; /* Clear all three buttons (hold + layout + close) */
+  height: var(--message-popover-header);
   background-color: rgba(0,0,0,0.05);
   /* The grab cursor only appears here */
   cursor: grab;
@@ -56,14 +130,15 @@
   cursor: grabbing;
 }
 
-/* Close Button: Positioned inside the 14px Header Strip */
-.popover-close {
+/* Header Strip Buttons: hold, layout and close, all 24x24 (WCAG 2.5.8) */
+.popover-close,
+.popover-layout,
+.popover-hold {
   position: absolute;
   inset-block-start: 0;
-  inset-inline-end: 0;
-  height: 14px;
-  width: 28px; /* Dedicated hit area width */
-  line-height: 12px; /* Optical centering for the × character */
+  height: 24px;
+  width: 24px;
+  line-height: 1;
   background: transparent;
   border: none;
   padding: 0;
@@ -77,15 +152,42 @@
   transition: background-color 0.2s, color 0.2s;
 }
 
-.popover-close:hover {
+.popover-close {
+  inset-inline-end: 0;
+  font-size: 16px;
+}
+
+.popover-layout {
+  inset-inline-end: 24px;
+}
+
+.popover-hold {
+  inset-inline-end: 48px;
+  font-size: 11px;
+}
+
+/* Held state is announced via aria-pressed; show it visually too. */
+.popover-hold[aria-pressed="true"] {
+  color: #000;
+  background-color: rgba(0, 0, 0, 0.12);
+}
+
+.popover-close:hover,
+.popover-layout:hover,
+.popover-hold:hover,
+.popover-close:focus-visible,
+.popover-layout:focus-visible,
+.popover-hold:focus-visible {
   color: #000;
   background-color: rgba(0, 0, 0, 0.1);
 }
 
 /* Content Area with Symmetrical Padding */
 .message-content {
-  padding-inline: 4rem 1.5rem;
-  padding-block: 1.5rem 1.5rem;
+  /* Clear the severity strip, derived from its width rather than a magic 4rem
+     that has to be re-derived by hand if the strip changes. Same 64px. */
+  padding-inline: calc(var(--message-popover-strip-width) + 16px) 1.5rem;
+  padding-block: var(--message-popover-content-padding);
   display: block;
   font-size: 0.95rem;
   line-height: 1.4;
@@ -97,10 +199,16 @@
   cursor: text;
 }
 
-/* Specifically target the text span for vertical breathing room */
+/* Underline links, as core's .messages did — identifying a link by more than
+   colour alone, against whatever background the theme gives us. */
+.message-content a {
+  text-decoration: underline;
+}
+
+/* No top margin: with the content padding at 12px the first line already lines
+   up against the icon, and the old 0.5rem pushed the text out of step with it. */
 .popover-message-text {
   display: inline-block;
-  margin-block-start: 0.5rem;
   vertical-align: middle;
 }
 
@@ -115,21 +223,24 @@
 .message-popover-item::before {
   content: "";
   position: absolute;
-  inset-block-start: 14px;
+  inset-block-start: var(--message-popover-header);
   inset-block-end: 0;
   inset-inline-start: 0;
-  width: 3rem;
+  width: var(--message-popover-strip-width);
   z-index: 1;
   pointer-events: none;
 }
 
-/* Sidebar Icon positioning */
+/* Sidebar Icon positioning.
+   Measured from the bottom of the header strip, so the icon holds its place if
+   the strip height changes. Horizontal centring is derived, not hardcoded:
+   (strip width - icon width) / 2. */
 .message-popover-icon {
   position: absolute;
-  inset-block-start: 2rem;
-  inset-inline-start: 0.75rem;
-  width: 1.5rem;
-  height: 1.5rem;
+  inset-block-start: calc(var(--message-popover-header) + var(--message-popover-icon-top));
+  inset-inline-start: calc((var(--message-popover-strip-width) - var(--message-popover-icon-size)) / 2);
+  width: var(--message-popover-icon-size);
+  height: var(--message-popover-icon-size);
   background-color: #fff;
   z-index: 2;
   mask-repeat: no-repeat;
