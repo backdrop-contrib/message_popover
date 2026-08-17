@@ -2,7 +2,9 @@
 
 All notable changes to Message Popover are recorded here.
 
-## 1.x-1.2.0 (unreleased)
+## 1.x-1.2.0 (2026-08-17)
+
+Git tag: `1.x-1.2.0`.
 
 ### BREAKING (display only) — markup contract
 
